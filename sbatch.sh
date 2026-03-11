@@ -184,6 +184,7 @@ fi
 
 
 mkdir -p $outdir
+mkdir -p slurm.logs
 
 
 
@@ -207,10 +208,10 @@ function cal_job(){
         return
     fi
 
-    if [[ direction == "x" ]]; then
+    if [[ "$direction" == "x" ]]; then
         outdirC2=${outdir}/${pbname}.y
         outdirC3=${outdir}/${pbname}.z
-    elif [[ direction == "y" ]]; then
+    elif [[ "$direction" == "y" ]]; then
         outdirC2=${outdir}/${pbname}.x
         outdirC3=${outdir}/${pbname}.z
     else
