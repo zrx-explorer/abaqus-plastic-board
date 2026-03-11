@@ -20,7 +20,7 @@ ulimit -s unlimited
 
 # Default parameters (can be overridden by environment variables)
 INFILE=${PLASIM_INFILE:-"/public/home/nieqi01/zrx/20260310abq-pla/stp/3x3x3_0.8/Array_3x3x3_S4_D8_12_12_12.step"}
-__scriptdir__=$(dirname $(readlink -f "${BASH_SOURCE[0]}"))
+__scriptdir__=${SLURM_SUBMIT_DIR:-$(pwd)}
 OUTDIR=${PLASIM_OUTDIR:-"$(dirname $__scriptdir__)/res-test"}
 DIRECTION=${PLASIM_DIRECTION:-"z"}
 NCPU=${PLASIM_NCPU:-"1"}
