@@ -50,7 +50,7 @@ ulimit -s unlimited
 
 
 
-infile=
+infile='tasks.txt'
 outdir=
 roscript=
 loadBalance=
