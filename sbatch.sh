@@ -16,14 +16,13 @@ module load compiler/intel/2021.3.0 mpi/intelmpi/2021.3.0
 ulimit -s unlimited
 
 infile='tasks.txt'
+materialsfile='materials.txt'
 outdir='/public/home/nieqi01/zrx/20260310abq-pla/res/'
 roscript='./run-plastic-board.sh'
 loadBalance=''
 srcdir='.'
 timelimit='1h'
-young_module=28700
 poisson_ration=0.3
-yield_stress=221.0
 density=2.7e-09
 
 scriptG=${srcdir}/get-standard-pid.sh
@@ -37,6 +36,11 @@ if [[ ! -e "$infile" ]]; then
     exit 1
 fi
 
+if [[ ! -e "$materialsfile" ]]; then
+    echo "Error: Materials file '$materialsfile' not found"
+    exit 1
+fi
+
 if [[ ! -e "$roscript" ]]; then
     echo "Error: Run script '$roscript' not found"
     exit 1
@@ -46,6 +50,10 @@ if [[ ! -e "$scriptG" ]]; then
     echo "Error: Helper script '$scriptG' not found"
     exit 1
 fi
+
+readarray -t material_lines < "$materialsfile"
+num_materials=${#material_lines[@]}
+echo ">>> Loaded $num_materials material sets from $materialsfile"
 
 
 
@@ -158,7 +166,11 @@ if [[ -z "$loadBalance" ]]; then
             continue
         fi
 
-        cal_job $path $direction
+        for mat_line in "${material_lines[@]}"; do
+            read -r young_module yield_stress <<< "$mat_line"
+            echo ">>> Running: $path $direction with E=$young_module, Y=$yield_stress"
+            cal_job $path $direction
+        done
 
     done < <(sed -n "${line_start},${line_end}p" $infile)
 
@@ -192,7 +204,11 @@ else
 
         read -r path direction <<< "$jobdef"
 
-        cal_job $path $direction
+        for mat_line in "${material_lines[@]}"; do
+            read -r young_module yield_stress <<< "$mat_line"
+            echo ">>> Running: $path $direction with E=$young_module, Y=$yield_stress"
+            cal_job $path $direction
+        done
 
         ((count++))
     done
