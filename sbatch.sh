@@ -17,7 +17,7 @@ ulimit -s unlimited
 
 infile='tasks.txt'
 outdir='/public/home/nieqi01/zrx/20260310abq-pla/res/'
-roscript='run-plastic-board.sh'
+roscript='./run-plastic-board.sh'
 loadBalance=''
 srcdir='.'
 timelimit='1h'
@@ -30,7 +30,7 @@ scriptG=${srcdir}/get-standard-pid.sh
 
 
 mkdir -p $outdir
-mkdir -p slurm.logs
+mkdir -p log
 
 if [[ ! -e "$infile" ]]; then
     echo "Error: Input file '$infile' not found"
