@@ -29,20 +29,16 @@ for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
     if row_idx == 1:
         continue
     
-    young = None
-    yield_s = None
-    for val in row:
-        if val is None:
-            continue
-        if isinstance(val, (int, float)):
-            if young is None:
-                young = val
-            elif yield_s is None:
-                yield_s = val
-                break
+    young = row[1] if len(row) > 1 else None
+    yield_s = row[4] if len(row) > 4 else None
     
-    if young and yield_s:
-        materials.append((young, yield_s))
+    if young is not None and yield_s is not None:
+        try:
+            young = float(young) * 1000
+            yield_s = float(yield_s)
+            materials.append((young, yield_s))
+        except (ValueError, TypeError):
+            continue
 
 output_file = "materials.txt"
 with open(output_file, "w") as f:
