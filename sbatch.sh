@@ -102,7 +102,7 @@ function cal_job(){
         return
     fi
 
-    timeout $timelimit $roscript -i $path -o $model_dir -${direction} -c 120 -n 2 -e \
+    timeout $timelimit $roscript -i $path -o $model_dir -${direction} -c 120 -n 1 -e \
         -E $young_module -P $poisson_ration -Y $yield_stress -R $density >& $model_dir/during.log
     if [[ $? -eq 124 ]]; then
         echo "Warning! timeout for $path $direction, killing all related processed ..."
