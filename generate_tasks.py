@@ -50,7 +50,7 @@ def main():
     )
     parser.add_argument(
         '-d', '--directions',
-        default='xyz',
+        default='z',
         help='Directions to simulate (default: xyz, e.g., xz for x and z only)'
     )
     parser.add_argument(
