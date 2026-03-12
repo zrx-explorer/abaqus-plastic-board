@@ -55,6 +55,11 @@ readarray -t material_lines < "$materialsfile"
 num_materials=${#material_lines[@]}
 echo ">>> Loaded $num_materials material sets from $materialsfile"
 
+result_csv="${outdir}/result.csv"
+if [[ ! -e "$result_csv" ]]; then
+    echo "stp_file,young_module,yield_stress,direction,sim_yield_strength" > "$result_csv"
+fi
+
 
 
 function cal_job(){
@@ -129,6 +134,20 @@ function cal_job(){
         rm -rf Job-Compression-Run.* *.sat *.py *.rec abaqusis.env abaqus_acis.log abaqus1.rec
         cd $curdir
     fi
+
+    # Append to result.csv
+    sim_yield=""
+    result_work_csv="$work_dir/$csv_file"
+    if [[ -e "$result_work_csv" ]]; then
+        yield_line=$(grep "^#.*YIELD_FORCE_N=" "$result_work_csv" | head -1)
+        if [[ -n "$yield_line" ]]; then
+            sim_yield=$(echo "$yield_line" | sed 's/.*YIELD_FORCE_N=\([^,]*\).*/\1/' | tr -d ' ')
+            if [[ "$sim_yield" == "Not_Reached" ]]; then
+                sim_yield="Not_Reached"
+            fi
+        fi
+    fi
+    echo "$stp_filename,$young_module,$yield_stress,$direction,$sim_yield" >> "$result_csv"
 
 }
 
