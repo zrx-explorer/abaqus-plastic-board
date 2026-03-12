@@ -7,39 +7,6 @@
 #SBATCH --array=0-999
 #SBATCH -o slurm.logs/log_%A_%a.txt
 
-usage() {
-    exitcode=$1
-    cat <<EOF
-Usage: $(basename "$0") [options]
-
-Options:
-  -h, --help              Show this help message
-  -i, --infile FILE       Input file
-      --infile=FILE
-  -s, --srcdir DIR        Source directory (default: current directory)
-      --srcdir=DIR
-  -o, --outdir DIR        Output directory
-      --outdir=DIR
-  -r, --roscript SCRIPT   Script to run (default: run-plastic-board.sh)
-      --roscript=SCRIPT
-  -l, --loadBalance       Enable load balancing mode
-  -E, --young MODULE      Young's modulus in MPa (default: 28700)
-      --young=MODULE
-  -P, --poisson RATIO     Poisson's ratio (default: 0.3)
-      --poisson=RATIO
-  -Y, --yield STRESS      Yield strength in MPa (default: 221.0)
-      --yield=STRESS
-  -R, --density DENSITY   Density in t/mm3 (default: 2.7e-09)
-      --density=DENSITY
-
-Examples:
-  $(basename "$0") -i data.txt -o results
-  $(basename "$0") --infile data.txt --outdir results --young 28700 --yield 221.0
-EOF
-    exit "$exitcode"
-}
-
-
 curdir=$PWD
 
 module purge
@@ -48,143 +15,37 @@ export I_MPI_PMI_LIBRARY=/opt/gridview/slurm/lib/libpmi2.so
 module load compiler/intel/2021.3.0 mpi/intelmpi/2021.3.0
 ulimit -s unlimited
 
-
-
 infile='tasks.txt'
-outdir=
-roscript=
-loadBalance=
-srcdir=
-timelimit=1h
+outdir='/public/home/nieqi01/zrx/20260310abq-pla/res/'
+roscript='run-plastic-board.sh'
+loadBalance=''
+srcdir='.'
+timelimit='1h'
 young_module=28700
 poisson_ration=0.3
 yield_stress=221.0
 density=2.7e-09
 
-while getopts ":hli:o:r:s:t:E:P:Y:R:-:" opt; do
-    case $opt in
-        h) usage 0 ;;
-        i) infile="$OPTARG" ;;
-        o) outdir="$OPTARG" ;;
-        r) roscript="$OPTARG" ;;
-        l) loadBalance=1 ;;
-        s) srcdir="$OPTARG" ;;
-        t) timelimit="$OPTARG" ;;
-        E) young_module="$OPTARG" ;;
-        P) poisson_ration="$OPTARG" ;;
-        Y) yield_stress="$OPTARG" ;;
-        R) density="$OPTARG" ;;
-        -)
-            case $OPTARG in
-                help) usage 0 ;;
-
-                infile)
-                    infile="${!OPTIND}"
-                    OPTIND=$((OPTIND+1))
-                    ;;
-                infile=*)
-                    infile="${OPTARG#*=}"
-                    ;;
-
-                outdir)
-                    outdir="${!OPTIND}"
-                    OPTIND=$((OPTIND+1))
-                    ;;
-                outdir=*)
-                    outdir="${OPTARG#*=}"
-                    ;;
-
-                roscript)
-                    roscript="${!OPTIND}"
-                    OPTIND=$((OPTIND+1))
-                    ;;
-                roscript=*)
-                    roscript="${OPTARG#*=}"
-                    ;;
-                loadBalance)
-                    loadBalance=1
-                    ;;
-                srcdir)
-                    srcdir="${!OPTIND}"
-                    OPTIND=$((OPTIND+1))
-                    ;;
-                srcdir=*)
-                    srcdir="${OPTARG#*=}"
-                    ;;
-                timelimit)
-                    timelimit="${!OPTIND}"
-                    OPTIND=$((OPTIND+1))
-                    ;;
-                timelimit=*)
-                    timelimit="${OPTARG#*=}"
-                    ;;
-                young)
-                    young_module="${!OPTIND}"
-                    OPTIND=$((OPTIND+1))
-                    ;;
-                young=*)
-                    young_module="${OPTARG#*=}"
-                    ;;
-                poisson)
-                    poisson_ration="${!OPTIND}"
-                    OPTIND=$((OPTIND+1))
-                    ;;
-                poisson=*)
-                    poisson_ration="${OPTARG#*=}"
-                    ;;
-                yield)
-                    yield_stress="${!OPTIND}"
-                    OPTIND=$((OPTIND+1))
-                    ;;
-                yield=*)
-                    yield_stress="${OPTARG#*=}"
-                    ;;
-                density)
-                    density="${!OPTIND}"
-                    OPTIND=$((OPTIND+1))
-                    ;;
-                density=*)
-                    density="${OPTARG#*=}"
-                    ;;
-                *)
-                    echo "Unknown option --$OPTARG"
-                    usage 1
-                    ;;
-            esac ;;
-        :)
-            echo "Option -$OPTARG requires an argument"
-            usage 1
-            ;;
-        \?)
-            echo "Unknown option -$OPTARG"
-            usage 1
-            ;;
-    esac
-done
-shift $((OPTIND-1))
-
-scriptG=${srcdir:-.}/get-standard-pid.sh
-
-
-echo ">>> infile=$infile"
-echo ">>> srcdir=$srcdir"
-echo ">>> outdir=$outdir"
-echo ">>> roscript=$roscript"
-echo ">>> loadBalance=$loadBalance"
-echo ">>> timelimit=$timelimit"
-echo ">>> young_module=$young_module"
-echo ">>> poisson_ration=$poisson_ration"
-echo ">>> yield_stress=$yield_stress"
-echo ">>> density=$density"
-echo ">>> scriptG=$scriptG"
-
-if [[ ! -e "$infile" || -z "$outdir" || ! -e "$roscript" || ! -e "$scriptG" ]]; then
-    usage 1
-fi
+scriptG=${srcdir}/get-standard-pid.sh
 
 
 mkdir -p $outdir
 mkdir -p slurm.logs
+
+if [[ ! -e "$infile" ]]; then
+    echo "Error: Input file '$infile' not found"
+    exit 1
+fi
+
+if [[ ! -e "$roscript" ]]; then
+    echo "Error: Run script '$roscript' not found"
+    exit 1
+fi
+
+if [[ ! -e "$scriptG" ]]; then
+    echo "Error: Helper script '$scriptG' not found"
+    exit 1
+fi
 
 
 
