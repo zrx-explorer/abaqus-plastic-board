@@ -57,7 +57,7 @@ echo ">>> Loaded $num_materials material sets from $materialsfile"
 
 result_csv="${outdir}/result.csv"
 if [[ ! -e "$result_csv" ]]; then
-    echo "stp_file,young_module,yield_stress,direction,sim_yield_strength" > "$result_csv"
+    echo "stp_file,young_module,yield_stress,direction,sim_yield_force,sim_yield_strength" > "$result_csv"
 fi
 
 
@@ -136,18 +136,22 @@ function cal_job(){
     fi
 
     # Append to result.csv
-    sim_yield=""
+    sim_yield_force=""
+    sim_yield_strength=""
     result_work_csv="$work_dir/$csv_file"
     if [[ -e "$result_work_csv" ]]; then
         yield_line=$(grep "^#.*YIELD_FORCE_N=" "$result_work_csv" | head -1)
         if [[ -n "$yield_line" ]]; then
-            sim_yield=$(echo "$yield_line" | sed 's/.*YIELD_FORCE_N=\([^,]*\).*/\1/' | tr -d ' ')
-            if [[ "$sim_yield" == "Not_Reached" ]]; then
-                sim_yield="Not_Reached"
+            sim_yield_force=$(echo "$yield_line" | sed 's/.*YIELD_FORCE_N=\([^,]*\).*/\1/' | tr -d ' ')
+            if [[ "$sim_yield_force" != "Not_Reached" ]]; then
+                area_a0=$(echo "$yield_line" | sed 's/.*AREA_A0=\([0-9.]*\).*/\1/' | tr -d ' ')
+                if [[ -n "$area_a0" && "$area_a0" != "0" ]]; then
+                    sim_yield_strength=$(awk "BEGIN {printf \"%.4f\", $sim_yield_force / $area_a0}")
+                fi
             fi
         fi
     fi
-    echo "$stp_filename,$young_module,$yield_stress,$direction,$sim_yield" >> "$result_csv"
+    echo "$stp_filename,$young_module,$yield_stress,$direction,$sim_yield_force,$sim_yield_strength" >> "$result_csv"
 
 }
 
