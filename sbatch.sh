@@ -59,8 +59,10 @@ function cal_job(){
     stp_filename=$(basename $path)
     stp_filename=${stp_filename%.*}
 
-    # Final work directory: outdir/pbname.direction/stp_EYoung_Yyield_direction/
-    work_dir="${outdir}/${pbname}.${direction}/${stp_filename}_E${young_module}_Y${yield_stress}_${direction}"
+    # run-plastic-board.sh creates: outdir/model.direction/stp_EYoung_Yyield_direction/
+    # and CSV file: stp_EYoung_Yyield_direction.csv inside that folder
+    model_dir="${outdir}/${pbname}.${direction}"
+    work_dir="${model_dir}/${stp_filename}_E${young_module}_Y${yield_stress}_${direction}"
     csv_file="${stp_filename}_E${young_module}_Y${yield_stress}_${direction}.csv"
     failed_csv_file="${stp_filename}_E${young_module}_Y${yield_stress}_${direction}_failed.csv"
 
@@ -80,42 +82,41 @@ function cal_job(){
         outdirC3=${outdir}/${pbname}.y
     fi
 
-    outdirC=${outdir}/${pbname}.${direction}
-    mkdir -p $outdirC
+    mkdir -p $model_dir
 
     if [[ -e ${outdirC2}/abaqusError || -e ${outdirC3}/abaqusError ]]; then
         echo "sbatch.sh: abaqusError exists in ${outdirC2} or ${outdirC3}, skip $path $direction"
-        touch $outdirC/abaqusError
+        touch $model_dir/abaqusError
         return
     fi
 
     if [[ -e ${outdirC2}/timeoutNote || -e ${outdirC3}/timeoutNote ]]; then
         echo "sbatch.sh: timeoutNote exists in ${outdirC2} or ${outdirC3}, skip $path $direction"
-        touch $outdirC/timeoutNote
+        touch $model_dir/timeoutNote
         return
     fi
 
     if [[ -e ${outdirC2}/skipNote || -e ${outdirC3}/skipNote ]]; then
         echo "sbatch.sh: skipNote exists in ${outdirC2} or ${outdirC3}, skip $path $direction"
-        touch $outdirC/skipNote
+        touch $model_dir/skipNote
         return
     fi
 
-    timeout $timelimit $roscript -i $path -o $outdirC -${direction} -c 120 -n 2 -e \
-        -E $young_module -P $poisson_ration -Y $yield_stress -R $density >& $outdirC/during.log
+    timeout $timelimit $roscript -i $path -o $model_dir -${direction} -c 120 -n 2 -e \
+        -E $young_module -P $poisson_ration -Y $yield_stress -R $density >& $model_dir/during.log
     if [[ $? -eq 124 ]]; then
         echo "Warning! timeout for $path $direction, killing all related processed ..."
-        touch $outdirC/timeoutNote
+        touch $model_dir/timeoutNote
         timeout_csv="${stp_filename}_E${young_module}_Y${yield_stress}_timeout.csv"
-        echo "Error: Simulation timeout" > $outdirC/$timeout_csv
-        psline=$($scriptG $outdirC)
+        echo "Error: Simulation timeout" > $model_dir/$timeout_csv
+        psline=$($scriptG $model_dir)
         if [[ -n "$psline" ]]; then
             pid=$(echo $psline | awk '{print $1}')
             echo "   - Simulation timeout, killing process $pid"
             kill -9 $pid
         fi
         sleep 5
-        cd $outdirC
+        cd $model_dir
         rm -rf *.odb *.stt *.mdl *.prt *.simdir
         rm -rf Job-Compression-Run.* *.sat *.py *.rec abaqusis.env abaqus_acis.log abaqus1.rec
         cd $curdir
