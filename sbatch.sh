@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=2
 #SBATCH --array=0-999
-#SBATCH -o slurm.logs/log_%A_%a.txt
+#SBATCH -o log_%A_%a.txt
 
 curdir=$PWD
 
