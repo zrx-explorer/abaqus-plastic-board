@@ -84,7 +84,7 @@ def set_mesh(model_name='Model-1'):
                                 secondOrderAccuracy=OFF, distortionControl=DEFAULT)
     pickedRegions =(cells, )                            
     part.setElementType(regions=pickedRegions, elemTypes=(elem_type_3, ))
-    part.seedPart(size=0.5, deviationFactor=0.1, minSizeFactor=0.01)
+    part.seedPart(size=0.8, deviationFactor=0.1, minSizeFactor=0.01)
     part.generateMesh()
 
 def set_steps(model_name='Model-1'):
@@ -95,20 +95,35 @@ def set_steps(model_name='Model-1'):
     
     model.fieldOutputRequests['F-Output-1'].setValues(timeInterval=0.01)
 
-def set_instances(bot_movement, top_movement, model_name='Model-1'):
+def set_instances(axis,bot_movement, top_movement, model_name='Model-1'):
     root = mdb.models[model_name].rootAssembly
     root.DatumCsysByDefault(CARTESIAN)
     
     part_board = mdb.models[model_name].parts['Part-2']
     part_structure = mdb.models[model_name].parts['structure']
-    
     root.Instance(name='structure-1', part=part_structure, dependent=ON)
     root.Instance(name='Part-2-1', part=part_board, dependent=ON)
-    root.Instance(name='Part-2-2', part=part_board, dependent=ON)
+    root.Instance(name='Part-2-2', part=part_board, dependent=ON)    
 
-    root.translate(instanceList=('Part-2-1', ), vector=top_movement)
-    root.translate(instanceList=('Part-2-2', ), vector=bot_movement)
-    
+    if axis=='z':
+        root.translate(instanceList=('Part-2-1', ), vector=top_movement)
+        root.translate(instanceList=('Part-2-2', ), vector=bot_movement)
+    if axis=='y':
+        root.rotate(instanceList=('Part-2-1', ), axisPoint=(0.0, 0.0, 0.0), 
+        axisDirection=(1.0, 0.0, 0.0), angle=90.0)  
+        root.rotate(instanceList=('Part-2-2', ), axisPoint=(0.0, 0.0, 0.0), 
+        axisDirection=(1.0, 0.0, 0.0), angle=90.0)  
+        root.translate(instanceList=('Part-2-1', ), vector=top_movement)
+        root.translate(instanceList=('Part-2-2', ), vector=bot_movement)
+    if axis=='x':
+        root.rotate(instanceList=('Part-2-1', ), axisPoint=(0.0, 0.0, 0.0), 
+        axisDirection=(0.0, 1.0, 0.0), angle=-90.0)  
+        root.rotate(instanceList=('Part-2-2', ), axisPoint=(0.0, 0.0, 0.0), 
+        axisDirection=(0.0, 1.0, 0.0), angle=-90.0)  
+        root.translate(instanceList=('Part-2-1', ), vector=top_movement)
+        root.translate(instanceList=('Part-2-2', ), vector=bot_movement)
+
+
     # Create Assembly-level set for reference point (for monitor.py to extract RF-U)
     inst_board_top = root.instances['Part-2-1']
     r1 = inst_board_top.referencePoints
@@ -160,7 +175,7 @@ def set_contact(secondary_inst_name, main_inst_name, axis, location, model_name,
         )
     print("Contact established for {} at {}={}".format(contact_name, axis, location))
 
-def set_bcs(top_board_name, bot_board_name, axis, top_loc, bot_loc, tol=1e-4, model_name='Model-1'):
+def set_bcs(top_board_name, bot_board_name, axis, top_loc, bot_loc, length, tol=1e-4, model_name='Model-1'):
     model = mdb.models[model_name]
     root = model.rootAssembly
 
@@ -193,10 +208,19 @@ def set_bcs(top_board_name, bot_board_name, axis, top_loc, bot_loc, tol=1e-4, mo
     if step_name not in model.steps.keys():
         model.StaticStep(name=step_name, previous='Initial', description='Static compression')
 
+    disp=[0,0,0]
+    if axis=='x':
+        disp[0]=-0.1*length
+    if axis=='y':
+        disp[1]=-0.1*length
+    if axis=='z':
+        disp[2]=-0.1*length
+    # Apply 10% stain
+    
     if 'BC-Disp-Top' not in model.boundaryConditions.keys():
         model.DisplacementBC(
             name='BC-Disp-Top', createStepName=step_name, region=region_top, 
-            u1=0, u2=0, u3=-0.4, ur1=0, ur2=0, ur3=0
+            u1=disp[0], u2=disp[1], u3=disp[2], ur1=0, ur2=0, ur3=0
         )
 
     if 'BC-Fixed-Bottom' not in model.boundaryConditions.keys():
@@ -249,13 +273,13 @@ if __name__ == '__main__':
     set_mesh(MODEL_NAME)
     set_steps(MODEL_NAME)
     if direction == 'x':
-        bot_movement = (x1 - 1, 0.0, 0.0)
-        top_movement = (x2, 0.0, 0.0)
+        bot_movement = (x1 , 0.0, 0.0)
+        top_movement = (x2 + 1, 0.0, 0.0)
         max_length=x2
         min_length=x1
     elif direction == 'y':
-        bot_movement = (0.0, y1 - 1, 0.0)
-        top_movement = (0.0, y2, 0.0)
+        bot_movement = (0.0, y1, 0.0)
+        top_movement = (0.0, y2 + 1, 0.0)
         max_length=y2
         min_length=y1        
     elif direction == 'z':
@@ -265,7 +289,8 @@ if __name__ == '__main__':
         min_length=z1        
     else:
         raise ValueError("Invalid direction parameter. Must be 'x', 'y', or 'z'.")
-    set_instances(bot_movement, top_movement, MODEL_NAME)
+    length=max_length-min_length
+    set_instances(direction, bot_movement, top_movement, MODEL_NAME)
     
     # Setup contacts and boundaries based on previous geometry logic
     print(direction, max_length, min_length)
@@ -273,7 +298,7 @@ if __name__ == '__main__':
     set_contact('structure-1', 'Part-2-1', direction, max_length, model_name=MODEL_NAME)
 
     set_contact('structure-1', 'Part-2-2', direction, min_length, model_name=MODEL_NAME) # Corrected to match your instance translation
-    set_bcs('Part-2-1', 'Part-2-2', direction, max_length, min_length-1, model_name=MODEL_NAME)
+    set_bcs('Part-2-1', 'Part-2-2', direction, max_length, min_length-1, length, model_name=MODEL_NAME)
     
     # Submit the analysis
     submit_job(model_name=MODEL_NAME, num_cpu=ncpus)
