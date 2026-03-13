@@ -4,7 +4,7 @@
 #SBATCH -t 60:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=2
-#SBATCH --mem=32G
+#SBATCH --mem=100GB
 #SBATCH --array=0-999
 #SBATCH -o log/log_%A_%a.txt
 
@@ -57,8 +57,16 @@ num_materials=${#material_lines[@]}
 echo ">>> Loaded $num_materials material sets from $materialsfile"
 
 result_csv="${outdir}/result.csv"
+failure_csv="${outdir}/result_failure.csv"
+
+# 初始化 result.csv（每个 STP 文件一行，x/y/z 三列）
 if [[ ! -e "$result_csv" ]]; then
-    echo "stp_file,young_module,yield_stress,direction,sim_yield_force,sim_yield_strength" > "$result_csv"
+    echo "stp_file,young_module,yield_stress,result_x_force,result_x_strength,result_y_force,result_y_strength,result_z_force,result_z_strength" > "$result_csv"
+fi
+
+# 初始化 result_failure.csv
+if [[ ! -e "$failure_csv" ]]; then
+    echo "stp_file,young_module,yield_stress,direction,error_type,error_message" > "$failure_csv"
 fi
 
 
@@ -68,20 +76,23 @@ function cal_job(){
     direction=$2
 
     bname=$(basename $path)
-    pbname=${bname%.*}  # remove suffix extension
+    pbname=${bname%.*}
 
     stp_filename=$(basename $path)
     stp_filename=${stp_filename%.*}
 
-    # run-plastic-board.sh creates: outdir/model.direction/stp_EYoung_Yyield_direction/
-    # and CSV file: stp_EYoung_Yyield_direction.csv inside that folder
     model_dir="${outdir}/${pbname}.${direction}"
     work_dir="${model_dir}/${stp_filename}_E${young_module}_Y${yield_stress}_${direction}"
     csv_file="${stp_filename}_E${young_module}_Y${yield_stress}_${direction}.csv"
     failed_csv_file="${stp_filename}_E${young_module}_Y${yield_stress}_${direction}_failed.csv"
 
-    if [[ -e $work_dir/$csv_file || -e $work_dir/$failed_csv_file ]]; then
+    if [[ -e $work_dir/$csv_file ]]; then
         echo "sbatch.sh: result csv already exists in $work_dir, skip it"
+        return
+    fi
+    
+    if [[ -e $work_dir/$failed_csv_file ]]; then
+        echo "sbatch.sh: failed csv exists in $work_dir, skip it"
         return
     fi
 
@@ -118,6 +129,10 @@ function cal_job(){
 
     timeout $timelimit $roscript -i $path -o $model_dir -${direction} -c 120 -n 1 -e \
         -E $young_module -P $poisson_ration -Y $yield_stress -R $density >& $model_dir/during.log
+    
+    error_type=""
+    error_msg=""
+    
     if [[ $? -eq 124 ]]; then
         echo "Warning! timeout for $path $direction, killing all related processed ..."
         touch $model_dir/timeoutNote
@@ -134,26 +149,71 @@ function cal_job(){
         rm -rf *.odb *.stt *.mdl *.prt *.simdir
         rm -rf Job-Compression-Run.* *.sat *.py *.rec abaqusis.env abaqus_acis.log abaqus1.rec
         cd $curdir
+        error_type="timeout"
+        error_msg="Simulation timeout after $timelimit"
+    fi
+    
+    if [[ -e $model_dir/abaqusError ]]; then
+        error_type="abaqus_error"
+        error_msg=$(cat $model_dir/during.log 2>/dev/null | grep -i "error" | head -1 | tr ',' ';')
+    elif [[ -e $model_dir/skipNote ]]; then
+        error_type="skipped"
+        error_msg="Task skipped"
+    fi
+    
+    if [[ -n "$error_type" ]]; then
+        echo "$stp_filename,$young_module,$yield_stress,$direction,$error_type,$error_msg" >> "$failure_csv"
     fi
 
-    # Append to result.csv
-    sim_yield_force=""
-    sim_yield_strength=""
-    result_work_csv="$work_dir/$csv_file"
-    if [[ -e "$result_work_csv" ]]; then
-        yield_line=$(grep "^#.*YIELD_FORCE_N=" "$result_work_csv" | head -1)
-        if [[ -n "$yield_line" ]]; then
-            sim_yield_force=$(echo "$yield_line" | sed 's/.*YIELD_FORCE_N=\([^,]*\).*/\1/' | tr -d ' ')
-            if [[ "$sim_yield_force" != "Not_Reached" ]]; then
-                area_a0=$(echo "$yield_line" | sed 's/.*AREA_A0=\([0-9.]*\).*/\1/' | tr -d ' ')
-                if [[ -n "$area_a0" && "$area_a0" != "0" ]]; then
-                    sim_yield_strength=$(awk "BEGIN {printf \"%.4f\", $sim_yield_force / $area_a0}")
+}
+
+function collect_results(){
+    path=$1
+    young_module=$2
+    yield_stress=$3
+    
+    bname=$(basename $path)
+    pbname=${bname%.*}
+    stp_filename=$(basename $path)
+    stp_filename=${stp_filename%.*}
+    
+    result_x_force="" result_x_strength=""
+    result_y_force="" result_y_strength=""
+    result_z_force="" result_z_strength=""
+    
+    for dir in x y z; do
+        model_dir="${outdir}/${pbname}.${dir}"
+        work_dir="${model_dir}/${stp_filename}_E${young_module}_Y${yield_stress}_${dir}"
+        csv_file="${stp_filename}_E${young_module}_Y${yield_stress}_${dir}.csv"
+        result_csv_path="$work_dir/$csv_file"
+        
+        if [[ -e "$result_csv_path" ]]; then
+            yield_line=$(grep "^#.*YIELD_FORCE_N=" "$result_csv_path" | head -1)
+            if [[ -n "$yield_line" ]]; then
+                force=$(echo "$yield_line" | sed 's/.*YIELD_FORCE_N=\([^,]*\).*/\1/' | tr -d ' ')
+                strength=""
+                if [[ "$force" != "Not_Reached" && -n "$force" ]]; then
+                    area_a0=$(echo "$yield_line" | sed 's/.*AREA_A0=\([0-9.]*\).*/\1/' | tr -d ' ')
+                    if [[ -n "$area_a0" && "$area_a0" != "0" ]]; then
+                        strength=$(awk "BEGIN {printf \"%.4f\", $force / $area_a0}")
+                    fi
+                fi
+                
+                if [[ "$dir" == "x" ]]; then
+                    result_x_force="$force"
+                    result_x_strength="$strength"
+                elif [[ "$dir" == "y" ]]; then
+                    result_y_force="$force"
+                    result_y_strength="$strength"
+                else
+                    result_z_force="$force"
+                    result_z_strength="$strength"
                 fi
             fi
         fi
-    fi
-    echo "$stp_filename,$young_module,$yield_stress,$direction,$sim_yield_force,$sim_yield_strength" >> "$result_csv"
-
+    done
+    
+    echo "$stp_filename,$young_module,$yield_stress,$result_x_force,$result_x_strength,$result_y_force,$result_y_strength,$result_z_force,$result_z_strength" >> "$result_csv"
 }
 
 
@@ -194,6 +254,12 @@ if [[ -z "$loadBalance" ]]; then
             read -r young_module yield_stress <<< "$mat_line"
             echo ">>> Running: $path $direction with E=$young_module, Y=$yield_stress"
             cal_job $path $direction
+        done
+        
+        # 收集这个 STP 文件的所有方向结果
+        for mat_line in "${material_lines[@]}"; do
+            read -r young_module yield_stress <<< "$mat_line"
+            collect_results "$path" "$young_module" "$yield_stress"
         done
 
     done < <(sed -n "${line_start},${line_end}p" $infile)
