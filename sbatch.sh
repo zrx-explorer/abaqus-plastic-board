@@ -4,7 +4,7 @@
 #SBATCH -t 60:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=2
-#SBATCH --mem=32G
+#SBATCH --mem=100GB
 #SBATCH --array=0-999
 #SBATCH -o log/log_%A_%a.txt
 
