@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-从 res 文件夹遍历所有仿真结果 CSV，生成汇总统计
+Traverse res folder and collect simulation results
 Usage: python regenerate_results.py /path/to/res
 """
 import os
