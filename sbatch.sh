@@ -129,11 +129,13 @@ function cal_job(){
 
     timeout $timelimit $roscript -i $path -o $model_dir -${direction} -c 120 -n 1 -e \
         -E $young_module -P $poisson_ration -Y $yield_stress -R $density >& $model_dir/during.log
+    exit_code=$?
     
     error_type=""
     error_msg=""
     
-    if [[ $? -eq 124 ]]; then
+    # Check timeout
+    if [[ $exit_code -eq 124 ]]; then
         echo "Warning! timeout for $path $direction, killing all related processed ..."
         touch $model_dir/timeoutNote
         timeout_csv="${stp_filename}_E${young_module}_Y${yield_stress}_timeout.csv"
@@ -153,16 +155,45 @@ function cal_job(){
         error_msg="Simulation timeout after $timelimit"
     fi
     
+    # Check abaqusError marker file (created by run-plastic-board.sh)
     if [[ -e $model_dir/abaqusError ]]; then
         error_type="abaqus_error"
-        error_msg=$(cat $model_dir/during.log 2>/dev/null | grep -i "error" | head -1 | tr ',' ';')
-    elif [[ -e $model_dir/skipNote ]]; then
-        error_type="skipped"
-        error_msg="Task skipped"
+        # Extract detailed error from during.log
+        error_msg=$(grep -i "error\|failed\|exception" $model_dir/during.log 2>/dev/null | head -3 | tr '\n' ' ' | tr ',' ';')
+        if [[ -z "$error_msg" ]]; then
+            error_msg="Abaqus error detected (see during.log for details)"
+        fi
     fi
     
+    # Check if run-plastic-board.sh created a failed CSV
+    if [[ -e $work_dir/$failed_csv_file ]]; then
+        error_type="simulation_failed"
+        # Read error from failed CSV
+        error_msg=$(cat $work_dir/$failed_csv_file 2>/dev/null | head -2 | tr '\n' ' ' | tr ',' ';')
+        if [[ -z "$error_msg" ]]; then
+            error_msg="Simulation failed (see failed CSV)"
+        fi
+    fi
+    
+    # Check skipNote marker
+    if [[ -e $model_dir/skipNote ]]; then
+        error_type="skipped"
+        error_msg="Task skipped (too many elements or warning elements)"
+    fi
+    
+    # Check for other errors in during.log even if no marker file exists
+    if [[ -z "$error_type" && $exit_code -ne 0 ]]; then
+        error_type="execution_error"
+        error_msg=$(grep -i "error\|failed\|exception" $model_dir/during.log 2>/dev/null | head -3 | tr '\n' ' ' | tr ',' ';')
+        if [[ -z "$error_msg" ]]; then
+            error_msg="Exit code: $exit_code"
+        fi
+    fi
+    
+    # Record failure to result_failure.csv
     if [[ -n "$error_type" ]]; then
         echo "$stp_filename,$young_module,$yield_stress,$direction,$error_type,$error_msg" >> "$failure_csv"
+        echo "  -> Recorded failure: $error_type"
     fi
 
 }
