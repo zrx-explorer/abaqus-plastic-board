@@ -52,20 +52,38 @@ def parse_filename(filename):
 def collect_all_results(res_dir):
     """遍历 res 目录收集所有结果"""
     results = []
+    total_csv = 0
+    skipped_failed = 0
+    skipped_parse = 0
+    skipped_read = 0
     
     for root, dirs, files in os.walk(res_dir):
         for filename in files:
-            if not filename.endswith('.csv') or '_failed' in filename or '_timeout' in filename:
+            if not filename.endswith('.csv'):
+                continue
+            
+            total_csv += 1
+            
+            # 跳过失败文件但计数
+            if '_failed' in filename or '_timeout' in filename:
+                skipped_failed += 1
                 continue
             
             csv_path = os.path.join(root, filename)
             parsed = parse_filename(filename)
             
             if not parsed:
+                skipped_parse += 1
                 continue
             
             stp_file, young_module, yield_stress, direction = parsed
-            yield_force, yield_strength = parse_result_csv(csv_path)
+            
+            try:
+                yield_force, yield_strength = parse_result_csv(csv_path)
+            except Exception as e:
+                skipped_read += 1
+                print("Warning: Cannot read {} - {}".format(filename, e))
+                continue
             
             results.append({
                 'stp_file': stp_file,
@@ -75,6 +93,12 @@ def collect_all_results(res_dir):
                 'yield_force': yield_force if yield_force else '',
                 'yield_strength': round(yield_strength, 4) if yield_strength else ''
             })
+    
+    print("Total CSV files found: {}".format(total_csv))
+    print("Skipped (failed/timeout): {}".format(skipped_failed))
+    print("Skipped (parse failed): {}".format(skipped_parse))
+    print("Skipped (read error): {}".format(skipped_read))
+    print("Successfully processed: {}".format(len(results)))
     
     return results
 
