@@ -93,7 +93,7 @@ def main():
     results = collect_all_results(res_dir)
     
     output_csv = os.path.join(res_dir, 'result_regenerated.csv')
-    with open(output_csv, 'w', newline='') as f:
+    with open(output_csv, 'w') as f:
         writer = csv.writer(f)
         writer.writerow(['stp_file', 'young_module', 'yield_stress', 'direction', 'yield_force', 'yield_strength'])
         
