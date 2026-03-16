@@ -86,10 +86,10 @@ def main():
     res_dir = sys.argv[1]
     
     if not os.path.isdir(res_dir):
-        print(f"Error: {res_dir} is not a directory")
+        print("Error: {} is not a directory".format(res_dir))
         sys.exit(1)
     
-    print(f"Scanning: {res_dir}")
+    print("Scanning: {}".format(res_dir))
     results = collect_all_results(res_dir)
     
     output_csv = os.path.join(res_dir, 'result_regenerated.csv')
@@ -107,12 +107,12 @@ def main():
                 row['yield_strength']
             ])
     
-    print(f"Generated {output_csv} with {len(results)} results")
+    print("Generated {} with {} results".format(output_csv, len(results)))
     
     # 统计信息
     success = sum(1 for r in results if r['yield_force'] != '')
     failed = len(results) - success
-    print(f"Success: {success}, Failed/Empty: {failed}")
+    print("Success: {}, Failed/Empty: {}".format(success, failed))
 
 if __name__ == '__main__':
     main()
