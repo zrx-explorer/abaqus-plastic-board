@@ -145,6 +145,25 @@ def main():
     
     print("Generated {} with {} results".format(output_csv, len(results)))
     
+    # Separate failed/empty results (CSV exists but no yield data)
+    failed_results = [r for r in results if r['yield_force'] == '']
+    if failed_results:
+        failed_csv = os.path.join(res_dir, 'result_failed.csv')
+        with open(failed_csv, 'w') as f:
+            writer = csv.writer(f)
+            writer.writerow(['stp_file', 'young_module', 'yield_stress', 'direction', 'yield_force', 'yield_strength', 'status'])
+            for row in failed_results:
+                writer.writerow([
+                    row['stp_file'],
+                    row['young_module'],
+                    row['yield_stress'],
+                    row['direction'],
+                    row['yield_force'],
+                    row['yield_strength'],
+                    'empty_yield_data'
+                ])
+        print("Generated {} with {} failed results (CSV exists but no yield data)".format(failed_csv, len(failed_results)))
+    
     # Find missing results by comparing with tasks.txt and materials.txt
     script_dir = os.path.dirname(os.path.abspath(__file__))
     tasks_file = os.path.join(script_dir, 'tasks.txt')
