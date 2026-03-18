@@ -58,6 +58,7 @@ echo ">>> Loaded $num_materials material sets from $materialsfile"
 
 result_csv="${outdir}/result.csv"
 failure_csv="${outdir}/result_failure.csv"
+time_csv="${outdir}/result_time.csv"
 
 # 初始化 result.csv（每个 STP 文件一行，x/y/z 三列）
 if [[ ! -e "$result_csv" ]]; then
@@ -67,6 +68,11 @@ fi
 # 初始化 result_failure.csv
 if [[ ! -e "$failure_csv" ]]; then
     echo "stp_file,young_module,yield_stress,direction,error_type,error_message" > "$failure_csv"
+fi
+
+# 初始化 result_time.csv（计算时间记录）
+if [[ ! -e "$time_csv" ]]; then
+    echo "stp_file,young_module,yield_stress,direction,start_time,end_time,duration_seconds,status" > "$time_csv"
 fi
 
 
@@ -127,12 +133,22 @@ function cal_job(){
         return
     fi
 
+    # Record start time
+    start_time=$(date +%s)
+    start_datetime=$(date '+%Y-%m-%d %H:%M:%S')
+    
     timeout $timelimit $roscript -i $path -o $model_dir -${direction} -c 120 -n 1 -e \
         -E $young_module -P $poisson_ration -Y $yield_stress -R $density >& $model_dir/during.log
     exit_code=$?
     
+    # Record end time and calculate duration
+    end_time=$(date +%s)
+    end_datetime=$(date '+%Y-%m-%d %H:%M:%S')
+    duration=$((end_time - start_time))
+    
     error_type=""
     error_msg=""
+    status="success"
     
     # Check timeout
     if [[ $exit_code -eq 124 ]]; then
@@ -153,6 +169,7 @@ function cal_job(){
         cd $curdir
         error_type="timeout"
         error_msg="Simulation timeout after $timelimit"
+        status="timeout"
     fi
     
     # Check abaqusError marker file (created by run-plastic-board.sh)
@@ -163,6 +180,7 @@ function cal_job(){
         if [[ -z "$error_msg" ]]; then
             error_msg="Abaqus error detected (see during.log for details)"
         fi
+        status="error"
     fi
     
     # Check if run-plastic-board.sh created a failed CSV
@@ -173,12 +191,14 @@ function cal_job(){
         if [[ -z "$error_msg" ]]; then
             error_msg="Simulation failed (see failed CSV)"
         fi
+        status="failed"
     fi
     
     # Check skipNote marker
     if [[ -e $model_dir/skipNote ]]; then
         error_type="skipped"
         error_msg="Task skipped (too many elements or warning elements)"
+        status="skipped"
     fi
     
     # Check for other errors in during.log even if no marker file exists
@@ -188,6 +208,7 @@ function cal_job(){
         if [[ -z "$error_msg" ]]; then
             error_msg="Exit code: $exit_code"
         fi
+        status="error"
     fi
     
     # Record failure to result_failure.csv
@@ -195,6 +216,9 @@ function cal_job(){
         echo "$stp_filename,$young_module,$yield_stress,$direction,$error_type,$error_msg" >> "$failure_csv"
         echo "  -> Recorded failure: $error_type"
     fi
+    
+    # Record timing to result_time.csv
+    echo "$stp_filename,$young_module,$yield_stress,$direction,$start_datetime,$end_datetime,$duration,$status" >> "$time_csv"
 
 }
 

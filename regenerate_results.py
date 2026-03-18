@@ -116,6 +116,7 @@ def main():
     print("Scanning: {}".format(res_dir))
     results = collect_all_results(res_dir)
     
+    # Write successful results
     output_csv = os.path.join(res_dir, 'result_regenerated.csv')
     with open(output_csv, 'w') as f:
         writer = csv.writer(f)
@@ -133,10 +134,86 @@ def main():
     
     print("Generated {} with {} results".format(output_csv, len(results)))
     
+    # Find missing results by comparing with tasks.txt and materials.txt
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    tasks_file = os.path.join(script_dir, 'tasks.txt')
+    materials_file = os.path.join(script_dir, 'materials.txt')
+    
+    missing_results = []
+    
+    if os.path.exists(tasks_file) and os.path.exists(materials_file):
+        print("\nChecking for missing results...")
+        
+        # Read tasks
+        with open(tasks_file, 'r') as f:
+            tasks = []
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        tasks.append((parts[0], parts[1]))  # (path, direction)
+        
+        # Read materials
+        with open(materials_file, 'r') as f:
+            materials = []
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        materials.append((float(parts[0]), float(parts[1])))  # (young, yield)
+        
+        print("Tasks: {}, Materials: {}".format(len(tasks), len(materials)))
+        
+        # Build set of existing results
+        existing = set()
+        for r in results:
+            key = (r['stp_file'], r['young_module'], r['yield_stress'], r['direction'])
+            existing.add(key)
+        
+        # Check what's missing
+        for task_path, direction in tasks:
+            stp_file = os.path.basename(task_path)
+            if stp_file.endswith('.stp') or stp_file.endswith('.step'):
+                stp_file = stp_file[:-4]
+            
+            for young, yield_s in materials:
+                key = (stp_file, young, yield_s, direction)
+                if key not in existing:
+                    missing_results.append({
+                        'stp_file': stp_file,
+                        'young_module': young,
+                        'yield_stress': yield_s,
+                        'direction': direction,
+                        'status': 'missing_result'
+                    })
+        
+        # Write missing results
+        if missing_results:
+            missing_csv = os.path.join(res_dir, 'result_missing.csv')
+            with open(missing_csv, 'w') as f:
+                writer = csv.writer(f)
+                writer.writerow(['stp_file', 'young_module', 'yield_stress', 'direction', 'status'])
+                for row in missing_results:
+                    writer.writerow([
+                        row['stp_file'],
+                        row['young_module'],
+                        row['yield_stress'],
+                        row['direction'],
+                        row['status']
+                    ])
+            print("Generated {} with {} missing results".format(missing_csv, len(missing_results)))
+        else:
+            print("All expected results found!")
+    
     # 统计信息
     success = sum(1 for r in results if r['yield_force'] != '')
     failed = len(results) - success
-    print("Success: {}, Failed/Empty: {}".format(success, failed))
+    print("\nSummary:")
+    print("  Success: {}".format(success))
+    print("  Failed/Empty: {}".format(failed))
+    print("  Missing: {}".format(len(missing_results)))
 
 if __name__ == '__main__':
     main()
