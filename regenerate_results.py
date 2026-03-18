@@ -49,6 +49,17 @@ def parse_filename(filename):
         return stp_file, young_module, yield_stress, direction
     return None
 
+def extract_stp_name(filepath):
+    """从文件路径提取 STP 文件名（不含扩展名）"""
+    basename = os.path.basename(filepath)
+    # 去掉 .stp 或 .step 扩展名
+    if basename.endswith('.step'):
+        return basename[:-5]
+    elif basename.endswith('.stp'):
+        return basename[:-4]
+    else:
+        return basename
+
 def collect_all_results(res_dir):
     """遍历 res 目录收集所有结果"""
     results = []
@@ -174,9 +185,7 @@ def main():
         
         # Check what's missing
         for task_path, direction in tasks:
-            stp_file = os.path.basename(task_path)
-            if stp_file.endswith('.stp') or stp_file.endswith('.step'):
-                stp_file = stp_file[:-4]
+            stp_file = extract_stp_name(task_path)
             
             for young, yield_s in materials:
                 key = (stp_file, young, yield_s, direction)
